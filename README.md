@@ -14,3 +14,5 @@ Stage 0 scripts take a sample from the raw dumps for experimentation.
 Stage 1 scripts can take a Stage 0 sample or the raw dumps. Their job is to extract all relevant submissions and comments and discard all irrelevant data.
 
 Stage 2 scripts take the result of Stage 1 scripts and extract any metadata required for later.
+
+Stage 3 scripts take the output of Stage 1 and Stage 2 scripts and combine them.

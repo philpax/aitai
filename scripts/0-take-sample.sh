@@ -9,4 +9,17 @@ fi
 src=$1
 dst=$2
 
-zstd -d --stdout $1 | tail -n 10000 > $dst
+LIMIT=10000
+
+if [[ $src == *.ndjson ]]; then
+    echo "Extracting from ndjson..."
+    tail -n $LIMIT $src > $dst
+    echo "Done!"
+elif [[ $src == *.zst ]]; then
+    echo "Extracting from zst..."
+    zstd -d --stdout $1 | tail -n $LIMIT > $dst
+    echo "Done!"
+else
+    echo "Unknown file extension"
+    exit 1
+fi

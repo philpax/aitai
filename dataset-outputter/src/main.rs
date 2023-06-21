@@ -1,3 +1,4 @@
+use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
 use std::{
     env,
@@ -34,7 +35,7 @@ fn main() -> anyhow::Result<()> {
 
     let mut output_file = File::create(output_path)?;
     for line in BufReader::new(File::open(input_path)?).lines() {
-        let data: DataIn = serde_json::from_str(&line?)?;
+        let mut data: DataIn = serde_json::from_str(&line?)?;
 
         let mut text = String::new();
         writeln!(text, "### Title:")?;
@@ -44,6 +45,16 @@ fn main() -> anyhow::Result<()> {
         writeln!(text, "### Text:")?;
         writeln!(text)?;
         writeln!(text, "{}\n", normalize(&data.text))?;
+
+        writeln!(text, "### Comments:")?;
+        writeln!(text)?;
+        data.comments.shuffle(&mut rand::thread_rng());
+        for comment in &data.comments {
+            for line in normalize(comment).lines() {
+                writeln!(text, "> {}", normalize(line))?;
+            }
+            writeln!(text)?;
+        }
 
         writeln!(text, "### Verdict:")?;
         writeln!(text)?;
@@ -71,5 +82,20 @@ struct DataOut {
 }
 
 fn normalize(s: &str) -> String {
-    s.nfkd().collect::<String>()
+    let mut output = String::new();
+    for c in html_escape::decode_html_entities(&s)
+        .replace("&#x200B;", "")
+        .nfkd()
+    {
+        match c {
+            '’' => output.push_str("\'"),
+            '“' => output.push_str("\""),
+            '”' => output.push_str("\""),
+            '–' => output.push_str("-"),
+            '—' => output.push_str("-"),
+            '…' => output.push_str("..."),
+            c => output.push(c),
+        }
+    }
+    output
 }

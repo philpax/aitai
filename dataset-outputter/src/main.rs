@@ -49,16 +49,15 @@ fn main() -> anyhow::Result<()> {
         writeln!(text, "### Comments:")?;
         writeln!(text)?;
         data.comments.shuffle(&mut rand::thread_rng());
-        for comment in &data.comments {
-            for line in normalize(comment).lines() {
-                writeln!(text, "> {}", normalize(line))?;
-            }
+        for (idx, comment) in data.comments.iter().enumerate() {
+            writeln!(text, "#### Person {}:", idx + 1)?;
+            writeln!(text, "{}", normalize(comment))?;
             writeln!(text)?;
         }
 
         writeln!(text, "### Verdict:")?;
         writeln!(text)?;
-        write!(text, "{}", data.verdict)?;
+        write!(text, "{}", normalize_verdict(&data.verdict))?;
 
         let output = DataOut { text };
         let output = serde_json::to_string(&output)?;
@@ -88,6 +87,7 @@ fn normalize(s: &str) -> String {
         .nfkd()
     {
         match c {
+            '‘' => output.push_str("\'"),
             '’' => output.push_str("\'"),
             '“' => output.push_str("\""),
             '”' => output.push_str("\""),
@@ -98,4 +98,14 @@ fn normalize(s: &str) -> String {
         }
     }
     output
+}
+
+fn normalize_verdict(verdict: &str) -> &str {
+    match verdict {
+        "Not the A-hole" => "NTA",
+        "No A-holes here" => "NAH",
+        "Everyone Sucks" => "ESH",
+        "Asshole" => "YTA",
+        _ => panic!("Unknown verdict: {}", verdict),
+    }
 }

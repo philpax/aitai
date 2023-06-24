@@ -10,15 +10,16 @@ src=$1
 dst=$2
 
 QUERY=' select(
-            .is_self and 
-            (.num_comments > 0) and 
-            (.link_flair_text != null) and 
-            (.name != null) and 
-            (.removed_by == null) and 
+            .is_self and
+            (.num_comments > 0) and
+            (.score > 500) and
+            (.link_flair_text != null) and
+            (.name != null) and
+            (.removed_by == null) and
             (.selftext != "[removed]") and
             (.selftext != "[deleted]") and
             (.link_flair_text | IN("Not the A-hole", "No A-holes here", "Everyone Sucks", "Asshole")) and
-            (.sticked | not) 
+            (.sticked | not)
         ) | {
             title,
             text: .selftext,

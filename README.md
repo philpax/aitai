@@ -54,11 +54,13 @@ Out of convenience, I will use OpenLLaMA.
 
 ### Process
 
-I believe that the best way to do this is to use a multi-stage pipeline to whittle down the amount of data to consider. This will make it easier to work with the data and will reduce the amount of data that needs to be processed by the LLM. These stages are in the `scripts` folder.
+I believe that the best way to do this is to use a multi-stage pipeline to whittle down the amount of data to consider. This will make it easier to work with the data and will reduce the amount of data that needs to be processed by the LLM.
 
-I used `jq` to process the data because this is a throwaway project, and it didn't deserve or require more heavy-duty solutions for data processing at scale. With that being said, though, I used Rust for the final stage (collating all of the data and producing the final dataset) because I like it, the ecosystem for managing text is good, and it's pretty fast by default.
+Each stage is implemented in the `scripts` folder. I used `jq` to process the data because this is a throwaway project, and it didn't deserve or require more heavy-duty solutions for data processing at scale. With that being said, though, I used Rust for the final stage (collating all of the data and producing the final dataset, `dataset-outputter`) because I like it, the ecosystem for managing text is good, and it's pretty fast by default.
 
-I initially thought about doing separate train/validation/test datasets, but I decided against it because that's too much work for an unserious project. However, I realised after my first attempt at a training run that I'd want a much smaller dataset. I did this by filtering for all posts with 500 karma or more, which reduced the dataset to 10% of the original size. This also means that everything outside of that can be used to test the model.
+I initially thought about constructing separate train/validation/test sets, but I decided against it because that's too much work for an unserious project.
+
+However, I realised after my first attempt at a training run that I'd want a much smaller dataset to prevent the training time from blowing out; I did this by filtering for all posts with 500 karma or more, which reduced the dataset to 10% of the original size. This also means that everything outside of that can be used to test the model.
 
 An entry in the final dataset looks something like this:
 
@@ -102,13 +104,13 @@ An entry in the final dataset looks something like this:
 > NTA
 
 
-My friend, [@avafloww](https://github.com/avafloww/), has a personal ML training rig with one to two 3090s based on current demand. She was kind enough to lend me access to train this. For training, I used [axolotl](https://github.com/OpenAccess-AI-Collective/axolotl), but immediately ran into issues - axolotl only works on Python 3.9, so I had to use Python 3.9 from [here](https://github.com/indygreg/python-build-standalone/releases) to create a venv that I could then work within.
+My friend, [@avafloww](https://github.com/avafloww/), has a personal ML training rig with one to two 3090s based on current demand; she was kind enough to lend access to train this. For training, I used [axolotl](https://github.com/OpenAccess-AI-Collective/axolotl), but immediately ran into issues - axolotl only works on Python 3.9, so I had to use Python 3.9 from [here](https://github.com/indygreg/python-build-standalone/releases) to create a venv that I could then work within.
 
-I decided to start training on OpenLLaMA 7B, due to its relatively small size. I then proceeded to waste several attempts and hours on configuring the training (including batch size). I managed to lock in some training settings and kicked off a run, only to get `RuntimeError: unscale_() has already been called on this optimizer since the last update().` after hours of training. Turns out this was a bug. It was fixed the day after I started training.
+I decided to start training on OpenLLaMA 7B, due to its relatively small size. I then proceeded to waste several attempts and hours on configuring the training (including batch size). I managed to lock in some training settings and kicked off a run, only to get `RuntimeError: unscale_() has already been called on this optimizer since the last update().` after hours of training. Turns out this was a bug - it was fixed the day after I started training :(
 
-My first training run worked and produced a LoRA that I could apply to OpenLLaMA 7B, but unfortunately all aspects suffered from poor quality results. I hypothesized this was due to both an insufficiently large model and a dataset that made it difficult for the model to know when to stop generating. I decided to address both of these in one go.
+My first training run worked and produced a LoRA that I could apply to OpenLLaMA 7B, but unfortunately the results were pretty crappy. I hypothesized this was due to both an insufficiently large model and a dataset that made it difficult for the model to know when to stop generating. I also discoered that `axolotl` defaults to a small context length by default, which meant that the generated posts were likely to lose coherence after 256 tokens. I decided to address all of these in one go.
 
-First, I changed the dataset formatting to make it clearer that there are multiple comment participants. Next, I decided to finetune a OpenLLaMA 13B model. Unfortunately for me, the former was easy, but the latter was not: it's harder than you think. Another contributor to the scaling struggle is being shown that axolotl does not default to training the maximum context length by default, which certainly didn't help with the coherence issues of the previous model. I fixed that, but that only made the problem worse.
+First, I changed the dataset formatting to make it clearer that there are multiple comment participants. Next, I decided to finetune a OpenLLaMA 13B model. Unfortunately for me, the former was easy, but the latter was not - it involved a *lot* of config tweaking, and fixing the context length resulted in the training process running out of memory.
 
 Ava was kind enough to enable the second 3090, which should have helped, but I was finding that, despite testing increasingly smaller batch sizes - including 1! - I was getting CUDA out of memory errors. I switched to QLoRA, which should be smaller to train, but found the only configuration that would work for training was a batch size of 1, which is... not fast. Free compute is free compute though, so I set it up and came back four days later, give or take.
 
@@ -131,7 +133,7 @@ I had a cursory look at why its classification was poor, and after thining about
 
 The dataset itself has a pretty significant bias towards NTA, which makes sense in hindsight. I selected for posts with above five hundred karma, but people on Reddit tend to vote with their heart and not their mind - so particularly controversial posts are unlikely to cross that threshold. This means that the model is more likely to classify posts as NTA, which is not ideal.
 
-Given this, I've decided not to continue. It took almost a week to train the model, and while making it better would be trivial - just sample equal amounts from each category - I don't want to contribute to the fake posting problem on /r/AITA. I mean, yes, Reddit is going down the toilet, but I don't want to be the one flushing it.
+Given this, I've decided not to continue. It took almost a week to train the model, and while making it better would be trivial - just sample equal amounts from each category - it just wasn't worth the effort, especially because it'd just be used for making fake posts on r/AITA. I mean, yes, Reddit is going down the toilet, but I don't want to be the one flushing it.
 
 ## Sample output
 

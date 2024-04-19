@@ -12,7 +12,6 @@ dst=$2
 QUERY=' select(
             .is_self and
             (.num_comments > 0) and
-            (.score > 500) and
             (.link_flair_text != null) and
             (.name != null) and
             (.removed_by == null) and

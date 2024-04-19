@@ -13,9 +13,9 @@ dst=$3
 QUERY=' {
             title,
             text,
-            comments: $comments[.name],
+            comments: ($comments[0][.name]),
             verdict
         }
         | select(.comments != null)'
 
-jq -c "$QUERY" --argfile comments $comments_src $submissions_src > $dst
+jq -c "$QUERY" --slurpfile comments "$comments_src" "$submissions_src" > "$dst"

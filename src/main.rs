@@ -5,7 +5,8 @@ use serde::{Deserialize, Serialize};
 
 const SUBMISSIONS_PATH: &str = "data/AmItheAsshole_submissions.zst";
 const COMMENTS_PATH: &str = "data/AmItheAsshole_comments.zst";
-const SUBMISSIONS_AND_COMMENTS_OUTPUT_PATH: &str = "data/submissions_and_comments.ndjson";
+const STAGE1_OUTPUT_PATH: &str = "data/stage1_output.ndjson";
+const STAGE2_OUTPUT_PATH: &str = "data/stage2_output.ndjson";
 
 #[derive(Deserialize, Serialize, Debug)]
 struct Submission {
@@ -53,8 +54,7 @@ mod stage1 {
     use zstd::stream::read::Decoder as ZstdDecoder;
 
     use super::{
-        Comment, Submission, Verdict, COMMENTS_PATH, SUBMISSIONS_AND_COMMENTS_OUTPUT_PATH,
-        SUBMISSIONS_PATH,
+        Comment, Submission, Verdict, COMMENTS_PATH, STAGE1_OUTPUT_PATH, SUBMISSIONS_PATH,
     };
 
     fn parse_verdict(value: &str) -> Option<Verdict> {
@@ -84,7 +84,7 @@ mod stage1 {
 
         println!("Submissions: writing");
         let start = std::time::Instant::now();
-        let file = std::fs::File::create(SUBMISSIONS_AND_COMMENTS_OUTPUT_PATH)?;
+        let file = std::fs::File::create(STAGE1_OUTPUT_PATH)?;
         let mut writer = std::io::BufWriter::new(file);
         for submission in submissions.values() {
             writeln!(writer, "{}", serde_json::to_string(submission)?)?;
@@ -181,8 +181,84 @@ mod stage1 {
 }
 
 mod stage2 {
+    use std::{fmt::Write, io::BufRead, io::Write as IoWrite};
+
+    use rand::prelude::SliceRandom;
+    use serde::Serialize;
+    use unicode_normalization::UnicodeNormalization;
+
+    use super::{Submission, Verdict, STAGE1_OUTPUT_PATH, STAGE2_OUTPUT_PATH};
+
+    #[derive(Serialize)]
+    struct DataOut {
+        text: String,
+    }
+
     pub fn run() -> anyhow::Result<()> {
-        println!("Stage 2");
+        let mut output_file = std::fs::File::create(STAGE2_OUTPUT_PATH)?;
+        for line in std::io::BufReader::new(std::fs::File::open(STAGE1_OUTPUT_PATH)?).lines() {
+            let data: Submission = serde_json::from_str(&line?)?;
+
+            let mut text = String::new();
+            writeln!(text, "### Title:")?;
+            writeln!(text)?;
+            writeln!(text, "{}\n", normalize(&data.title))?;
+
+            writeln!(text, "### Text:")?;
+            writeln!(text)?;
+            writeln!(text, "{}\n", normalize(&data.text))?;
+
+            writeln!(text, "### Comments:")?;
+            writeln!(text)?;
+
+            let mut comments = data.comments.values().collect::<Vec<_>>();
+            comments.sort_by_key(|c| -c.score);
+            comments.truncate(5);
+            comments.shuffle(&mut rand::thread_rng());
+
+            for (idx, comment) in comments.iter().enumerate() {
+                writeln!(text, "#### Person {}:", idx + 1)?;
+                writeln!(text, "{}", normalize(&comment.body))?;
+                writeln!(text)?;
+            }
+
+            writeln!(text, "### Verdict:")?;
+            writeln!(text)?;
+            write!(
+                text,
+                "{}",
+                match data.verdict {
+                    Verdict::NotTheAsshole => "NTA",
+                    Verdict::NoAssholesHere => "NAH",
+                    Verdict::EveryoneSucks => "ESH",
+                    Verdict::Asshole => "YTA",
+                }
+            )?;
+
+            let output = serde_json::to_string(&(DataOut { text }))?;
+            writeln!(output_file, "{}", output)?;
+        }
+
         Ok(())
+    }
+
+    fn normalize(s: &str) -> String {
+        let mut output = String::new();
+        for c in html_escape::decode_html_entities(&s)
+            .replace("&#x200B;", "")
+            .nfkd()
+        {
+            match c {
+                '‘' => output.push_str("\'"),
+                '’' => output.push_str("\'"),
+                '“' => output.push_str("\""),
+                '”' => output.push_str("\""),
+                '–' => output.push_str("-"),
+                '—' => output.push_str("-"),
+                '…' => output.push_str("..."),
+                c => output.push(c),
+            }
+        }
+        output
     }
 }

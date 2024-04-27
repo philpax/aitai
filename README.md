@@ -23,8 +23,10 @@ cargo run --release -- ../data/submissions_and_comments.ndjson ../data/output.nd
 That will produce a dataset. Next, use Docker and Axolotl to tokenise the dataset and train on it (again, in this directory); this assumes the use of a single 3090 being used for a full-finetune, adjust as necessary:
 ```sh
 docker run --privileged --gpus '"all"' --rm -it --name axolotl --mount type=bind,src="${PWD}",target=/workspace/axolotl/aitai -v ${HOME}/.cache/huggingface:/root/.cache/huggingface winglian/axolotl:main-latest
-CUDA_VISIBLE_DEVICES="" python -m axolotl.cli.preprocess aitai/stablelm-2-1-6b-fft.yml
-python -m axolotl.cli.train aitai/stablelm-2-1-6b-fft.yml
+
+# stablelm-2-1-6b-fft.yml / phi-2-lora.yml / llama-3-8b-lora.yml
+CUDA_VISIBLE_DEVICES="" python -m axolotl.cli.preprocess aitai/axolotl-configs/stablelm-2-1-6b-fft.yml
+python -m axolotl.cli.train aitai/axolotl-configs/stablelm-2-1-6b-fft.yml
 ```
 
 ### Scripts

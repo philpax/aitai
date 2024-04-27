@@ -1,3 +1,8 @@
 data
 *-out
 *.gguf
+
+
+# Added by cargo
+
+/target

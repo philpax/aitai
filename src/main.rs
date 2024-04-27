@@ -7,6 +7,8 @@ const SUBMISSIONS_PATH: &str = "data/AmItheAsshole_submissions.zst";
 const COMMENTS_PATH: &str = "data/AmItheAsshole_comments.zst";
 const STAGE1_OUTPUT_PATH: &str = "data/stage1_output.ndjson";
 const STAGE2_OUTPUT_PATH: &str = "data/stage2_output.ndjson";
+const STAGE3_OUTPUT_PATH: &str = "data/stage3_output.ndjson";
+const MAX_SUBMISSIONS_PER_VERDICT: usize = 500;
 
 #[derive(Deserialize, Serialize, Debug)]
 struct Submission {
@@ -21,7 +23,7 @@ struct Comment {
     body: String,
     score: i32,
 }
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
 enum Verdict {
     NotTheAsshole,
     NoAssholesHere,
@@ -36,6 +38,7 @@ fn main() -> anyhow::Result<()> {
     match first_arg.as_str() {
         "stage1" => stage1::run()?,
         "stage2" => stage2::run()?,
+        "stage3" => stage3::run()?,
         _ => anyhow::bail!("invalid argument; must be stage1 or stage2"),
     }
 
@@ -43,6 +46,10 @@ fn main() -> anyhow::Result<()> {
 }
 
 mod stage1 {
+    //! Ingests all submissions and comments, ignoring the submissions that are
+    //! immediately irrelevant to our task, and then outputs the submissions with
+    //! their comments to a new file.
+
     use std::{
         borrow::Cow,
         collections::HashMap,
@@ -57,30 +64,20 @@ mod stage1 {
         Comment, Submission, Verdict, COMMENTS_PATH, STAGE1_OUTPUT_PATH, SUBMISSIONS_PATH,
     };
 
-    fn parse_verdict(value: &str) -> Option<Verdict> {
-        match value {
-            "Not the A-hole" => Some(Verdict::NotTheAsshole),
-            "No A-holes here" => Some(Verdict::NoAssholesHere),
-            "Everyone Sucks" => Some(Verdict::EveryoneSucks),
-            "Asshole" => Some(Verdict::Asshole),
-            _ => None,
-        }
-    }
-
     pub fn run() -> anyhow::Result<()> {
         println!("Submissions: reading");
         let start = std::time::Instant::now();
         let mut submissions = read_submissions()?;
         println!(
-            "Submissions: read at {}s, {} items",
+            "Submissions: read {} items ({}s)",
+            submissions.len(),
             start.elapsed().as_secs_f32(),
-            submissions.len()
         );
 
         println!("Comments: populating");
         let start = std::time::Instant::now();
         populate_comments(&mut submissions)?;
-        println!("Comments: populated at {}s", start.elapsed().as_secs_f32());
+        println!("Comments: populated ({}s)", start.elapsed().as_secs_f32());
 
         println!("Submissions: writing");
         let start = std::time::Instant::now();
@@ -89,7 +86,7 @@ mod stage1 {
         for submission in submissions.values() {
             writeln!(writer, "{}", serde_json::to_string(submission)?)?;
         }
-        println!("Submissions: written at {}s", start.elapsed().as_secs_f32());
+        println!("Submissions: written ({}s)", start.elapsed().as_secs_f32());
 
         Ok(())
     }
@@ -143,6 +140,16 @@ mod stage1 {
             .collect())
     }
 
+    fn parse_verdict(value: &str) -> Option<Verdict> {
+        match value {
+            "Not the A-hole" => Some(Verdict::NotTheAsshole),
+            "No A-holes here" => Some(Verdict::NoAssholesHere),
+            "Everyone Sucks" => Some(Verdict::EveryoneSucks),
+            "Asshole" => Some(Verdict::Asshole),
+            _ => None,
+        }
+    }
+
     fn populate_comments(submissions: &mut HashMap<String, Submission>) -> anyhow::Result<()> {
         #[derive(Deserialize, Debug)]
         struct CommentRaw<'a> {
@@ -181,13 +188,82 @@ mod stage1 {
 }
 
 mod stage2 {
+    //! Buckets all of the submissions by their verdicts, sorts them by some metric, and then selects the top N
+    //! submissions from each bucket to output.
+
+    use std::{
+        collections::HashMap,
+        io::{BufRead, Write as IoWrite},
+    };
+
+    use rand::prelude::SliceRandom;
+
+    use super::{
+        Submission, Verdict, MAX_SUBMISSIONS_PER_VERDICT, STAGE1_OUTPUT_PATH, STAGE2_OUTPUT_PATH,
+    };
+
+    pub fn run() -> anyhow::Result<()> {
+        let mut buckets: HashMap<Verdict, Vec<Submission>> = Default::default();
+
+        // Ingest all data into buckets
+        println!("Submissions: reading");
+        let now = std::time::Instant::now();
+        for line in std::io::BufReader::new(std::fs::File::open(STAGE1_OUTPUT_PATH)?).lines() {
+            let submission: Submission = serde_json::from_str(&line?)?;
+            buckets
+                .entry(submission.verdict)
+                .or_default()
+                .push(submission);
+        }
+        println!("Submissions: read ({}s)", now.elapsed().as_secs_f32());
+
+        // Sort and prune the buckets
+        println!("Submissions: sorting");
+        let now = std::time::Instant::now();
+        for bucket in buckets.values_mut() {
+            bucket.sort_by_key(|submission| submission.score + submission.comments.len() as i32);
+            bucket.truncate(MAX_SUBMISSIONS_PER_VERDICT);
+        }
+        println!("Submissions: sorted ({}s)", now.elapsed().as_secs_f32());
+
+        // Collect all of the submissions once more
+        println!("Submissions: collecting");
+        let now = std::time::Instant::now();
+        let mut output_file = std::fs::File::create(STAGE2_OUTPUT_PATH)?;
+        let mut data = buckets
+            .values_mut()
+            .flat_map(|v| v.drain(..))
+            .collect::<Vec<_>>();
+        data.shuffle(&mut rand::thread_rng());
+        println!("Submissions: collected ({}s)", now.elapsed().as_secs_f32());
+
+        // Output them
+        println!("Submissions: writing");
+        let now = std::time::Instant::now();
+        for submission in &data {
+            let output = serde_json::to_string(&submission)?;
+            writeln!(output_file, "{}", output)?;
+        }
+        println!(
+            "Submissions: written {} items ({}s)",
+            data.len(),
+            now.elapsed().as_secs_f32()
+        );
+
+        Ok(())
+    }
+}
+
+mod stage3 {
+    //! Produces the final training dataset.
+
     use std::{fmt::Write, io::BufRead, io::Write as IoWrite};
 
     use rand::prelude::SliceRandom;
     use serde::Serialize;
     use unicode_normalization::UnicodeNormalization;
 
-    use super::{Submission, Verdict, STAGE1_OUTPUT_PATH, STAGE2_OUTPUT_PATH};
+    use super::{Submission, Verdict, STAGE2_OUTPUT_PATH, STAGE3_OUTPUT_PATH};
 
     #[derive(Serialize)]
     struct DataOut {
@@ -195,8 +271,21 @@ mod stage2 {
     }
 
     pub fn run() -> anyhow::Result<()> {
-        let mut output_file = std::fs::File::create(STAGE2_OUTPUT_PATH)?;
-        for line in std::io::BufReader::new(std::fs::File::open(STAGE1_OUTPUT_PATH)?).lines() {
+        let mut output_file = std::fs::File::create(STAGE3_OUTPUT_PATH)?;
+        println!("Submissions: processing");
+        let now = std::time::Instant::now();
+        for (index, line) in std::io::BufReader::new(std::fs::File::open(STAGE2_OUTPUT_PATH)?)
+            .lines()
+            .enumerate()
+        {
+            if index % 1_000 == 0 {
+                println!(
+                    "Submissions: processed {} at {}s",
+                    index,
+                    now.elapsed().as_secs_f32()
+                );
+            }
+
             let data: Submission = serde_json::from_str(&line?)?;
 
             let mut text = String::new();
@@ -235,9 +324,13 @@ mod stage2 {
                 }
             )?;
 
-            let output = serde_json::to_string(&(DataOut { text }))?;
+            let output = serde_json::to_string(&DataOut { text })?;
             writeln!(output_file, "{}", output)?;
         }
+        println!(
+            "Submissions: processed all at {}s",
+            now.elapsed().as_secs_f32()
+        );
 
         Ok(())
     }

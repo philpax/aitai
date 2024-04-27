@@ -22,6 +22,17 @@ That will produce a dataset. Next, use Docker and Axolotl to tokenise the datase
 docker run --privileged --gpus '"all"' --rm -it --name axolotl --mount type=bind,src="${PWD}",target=/workspace/axolotl/aitai -v ${HOME}/.cache/huggingface:/root/.cache/huggingface winglian/axolotl:main-latest
 
 # stablelm-2-1-6b-fft.yml / phi-2-lora.yml / llama-3-8b-lora.yml
-CUDA_VISIBLE_DEVICES="" python -m axolotl.cli.preprocess aitai/axolotl-configs/stablelm-2-1-6b-fft.yml
-python -m axolotl.cli.train aitai/axolotl-configs/stablelm-2-1-6b-fft.yml
+python -m axolotl.cli.preprocess aitai/axolotl-configs/phi-2-lora.yml
+python -m axolotl.cli.train aitai/axolotl-configs/phi-2-lora.yml
+
+# Merge model if required
+python3 -m axolotl.cli.merge_lora aitai/axolotl-configs/phi-2-lora.yml
+```
+
+The resulting model can be converted to GGUF for inference (assuming you have a llama.cpp installation):
+```sh
+cd llama.cpp
+# activate nix-shell, venvs as required
+# use appropriate paths and names
+python convert-hf-to-gguf.py ~/Documents/Programming/aitai/phi-2-lora-out/merged --outfile ~/Documents/Programming/aitai/aitai-phi-2.gguf --outtype f16
 ```

@@ -15,6 +15,7 @@ output_dir: aitai/phi-2-lora-out
 
 sequence_len: 2048
 sample_packing: true
+eval_sample_packing: false
 pad_to_sequence_len: true
 
 adapter: lora
@@ -31,9 +32,9 @@ wandb_watch:
 wandb_name:
 wandb_log_model:
 
-gradient_accumulation_steps: 1
-micro_batch_size: 6
-num_epochs: 1
+gradient_accumulation_steps: 4
+micro_batch_size: 8
+num_epochs: 4
 optimizer: adamw_torch
 adam_beta2: 0.95
 adam_epsilon: 0.00001

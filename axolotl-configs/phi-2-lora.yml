@@ -7,7 +7,7 @@ load_in_4bit: false
 strict: false
 
 datasets:
-  - path: aitai/data/output.ndjson
+  - path: aitai/data/stage3_output.ndjson
     type: completion
 dataset_prepared_path: last_run_prepared
 val_set_size: 0.05
@@ -68,4 +68,3 @@ fsdp_config:
 resize_token_embeddings_to_32x: true
 special_tokens:
   pad_token: "<|endoftext|>"
-

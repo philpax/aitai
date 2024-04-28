@@ -2,13 +2,13 @@ base_model: NousResearch/Meta-Llama-3-8B
 model_type: LlamaForCausalLM
 tokenizer_type: AutoTokenizer
 
-load_in_8bit: true
-load_in_4bit: false
+load_in_8bit: false
+load_in_4bit: true
 strict: false
 
 datasets:
   - path: aitai/data/stage3_output.ndjson
-    type: completion
+    type: alpaca
 dataset_prepared_path: last_run_prepared
 val_set_size: 0.05
 output_dir: aitai/llama-3-8b-lora-out
@@ -18,7 +18,7 @@ sample_packing: true
 eval_sample_packing: false
 pad_to_sequence_len: true
 
-adapter: lora
+adapter: qlora
 lora_model_dir:
 lora_r: 32
 lora_alpha: 16
@@ -32,9 +32,9 @@ wandb_watch:
 wandb_name:
 wandb_log_model:
 
-gradient_accumulation_steps: 4
-micro_batch_size: 1
-num_epochs: 2
+gradient_accumulation_steps: 2
+micro_batch_size: 2
+num_epochs: 4
 optimizer: adamw_bnb_8bit
 lr_scheduler: cosine
 learning_rate: 0.0002
